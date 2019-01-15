@@ -1,8 +1,8 @@
 import Store from '/javascripts/store.js';
-import GooglePay from '/javascripts/googlePayClient.js';
+import googlePay from '/javascripts/googlePayClient.js';
 /**
  * payments.js
- * Stripe Payments Demo. Created by Romain Huet (@romainhuet) 
+ * Stripe Payments Demo. Created by Romain Huet (@romainhuet)
  * and Thorsten Schaeff (@thorwebdev).
  *
  * This modern JavaScript file handles the checkout process using Stripe.
@@ -34,10 +34,9 @@ import GooglePay from '/javascripts/googlePayClient.js';
    */
 
   // Create a Stripe client.
-  const stripe = Stripe(
-    config.stripePublishableKey,
-    {betas: ['payment_intent_beta_3']},
-  );
+  const stripe = Stripe(config.stripePublishableKey, {
+    betas: ['payment_intent_beta_3'],
+  });
 
   // Create an instance of Elements.
   const elements = stripe.elements();
@@ -167,10 +166,12 @@ import GooglePay from '/javascripts/googlePayClient.js';
   // Callback when a source is created.
   paymentRequest.on('source', async event => {
     try {
-      const paymentResponse = await stripe
-      .handleCardPayment(paymentIntent.client_secret, {
-        source: event.source.id,
-      });
+      const paymentResponse = await stripe.handleCardPayment(
+        paymentIntent.client_secret,
+        {
+          source: event.source.id,
+        }
+      );
       handlePayment(paymentResponse);
       event.complete('success');
     } catch (error) {
@@ -189,35 +190,41 @@ import GooglePay from '/javascripts/googlePayClient.js';
   });
 
   // Initialise cross-browser Google
-  const gPay = new GooglePay(config);
+  const gPay = googlePay(config);
+  console.log(gPay);
   // Parallelise promises for Stripe PRAPI button and Google cross-browser Pay.js
   const gPayClient = gPay.getGooglePaymentsClient();
   Promise.all([
     paymentRequest.canMakePayment(), // from Stripe.js
-    gPayClient.isReadyToPay(gPay.getGoogleIsReadyToPayRequest()) // from Pay.js
+    gPayClient.isReadyToPay(gPay.getGoogleIsReadyToPayRequest()), // from Pay.js
   ]).then(function(values) {
-    const PRAPI = (values[0] && !values[0].applePay);
+    const PRAPI = values[0] && !values[0].applePay;
     const APAY = values[0] ? values[0].applePay : false;
-    const GPAY = (values[1].result && values[1].paymentMethodPresent);
+    const GPAY = values[1].result && values[1].paymentMethodPresent;
     console.log({PRAPI, APAY, GPAY});
     if (APAY || (PRAPI && !GPAY)) {
       // Display the Pay button by mounting the Element in the DOM.
       paymentRequestButton.mount('#payment-request-button');
     } else if (GPAY) {
-      gPay.addGooglePayButton('payment-request-button', async googlePaymentData => {
-        const {token, error} = googlePaymentData;
-        if (error) {
-          handlePayment(error);
-        }
-        const paymentResponse = await stripe
-          .handleCardPayment(paymentIntent.client_secret, {
-            source_data: {
-              type: 'card', 
-              token: token.id
-            },
-          });
+      gPay.addGooglePayButton(
+        'payment-request-button',
+        async googlePaymentData => {
+          const {token, error} = googlePaymentData;
+          if (error) {
+            handlePayment(error);
+          }
+          const paymentResponse = await stripe.handleCardPayment(
+            paymentIntent.client_secret,
+            {
+              source_data: {
+                type: 'card',
+                token: token.id,
+              },
+            }
+          );
           handlePayment(paymentResponse);
-      });
+        }
+      );
     }
     if (APAY || PRAPI || GPAY) {
       // Replace the instruction.
@@ -272,30 +279,36 @@ import GooglePay from '/javascripts/googlePayClient.js';
 
     if (payment === 'card') {
       // Let Stripe.js handle the confirmation of the PaymentIntent with the card Element.
-      const response = await stripe
-      .handleCardPayment(paymentIntent.client_secret, card, {
-        source_data: {
-          owner: {
-            name,
+      const response = await stripe.handleCardPayment(
+        paymentIntent.client_secret,
+        card,
+        {
+          source_data: {
+            owner: {
+              name,
+            },
           },
-        },
-      });
+        }
+      );
       handlePayment(response);
     } else if (payment === 'sepa_debit') {
-      const response = await stripe
-      .handleSepaDebitPayment(paymentIntent.client_secret, iban, {
-        source_data: {
-          owner: {
-            name,
-            email,
+      const response = await stripe.handleSepaDebitPayment(
+        paymentIntent.client_secret,
+        iban,
+        {
+          source_data: {
+            owner: {
+              name,
+              email,
+            },
+            mandate: {
+              // Automatically send a mandate notification email to your customer
+              // once the source is charged.
+              notification_method: 'email',
+            },
           },
-          mandate: {
-            // Automatically send a mandate notification email to your customer
-            // once the source is charged.
-            notification_method: 'email',
-          },
-        },
-      });
+        }
+      );
       handlePayment(response);
     } else {
       // Prepare all the Stripe source common data.
@@ -320,10 +333,7 @@ import GooglePay from '/javascripts/googlePayClient.js';
       switch (payment) {
         case 'ideal':
           // iDEAL: Add the selected Bank from the iDEAL Bank Element.
-          const {source} = await stripe.createSource(
-            idealBank,
-            sourceData
-          );
+          const {source} = await stripe.createSource(idealBank, sourceData);
           handleSourceActiviation(source);
           return;
           break;
@@ -347,22 +357,19 @@ import GooglePay from '/javascripts/googlePayClient.js';
   });
 
   // Handle new PaymentIntent result
-  const handlePayment = (paymentResponse) => {
+  const handlePayment = paymentResponse => {
     const {paymentIntent, error} = paymentResponse;
 
     const mainElement = document.getElementById('main');
     const confirmationElement = document.getElementById('confirmation');
-    
-    if (error) {
 
+    if (error) {
       mainElement.classList.remove('processing');
       mainElement.classList.remove('receiver');
       confirmationElement.querySelector('.error-message').innerText =
         error.message;
       mainElement.classList.add('error');
-
     } else if (paymentIntent.status === 'succeeded') {
-
       // Success! Payment is confirmed. Update the interface to display the confirmation screen.
       mainElement.classList.remove('processing');
       mainElement.classList.remove('receiver');
@@ -370,29 +377,24 @@ import GooglePay from '/javascripts/googlePayClient.js';
       confirmationElement.querySelector('.note').innerText =
         'We just sent your receipt to your email address, and your items will be on their way shortly.';
       mainElement.classList.add('success');
-
     } else if (paymentIntent.status === 'processing') {
-
       // Success! Now waiting for payment confirmation. Update the interface to display the confirmation screen.
       mainElement.classList.remove('processing');
       // Update the note about receipt and shipping (the payment is not yet confirmed by the bank).
       confirmationElement.querySelector('.note').innerText =
         'We’ll send your receipt and ship your items as soon as your payment is confirmed.';
       mainElement.classList.add('success');
-
     } else {
-
       // Payment has failed.
       mainElement.classList.remove('success');
       mainElement.classList.remove('processing');
       mainElement.classList.remove('receiver');
       mainElement.classList.add('error');
-      
     }
   };
 
   // Handle activation of payment sources not yet supported by PaymentIntents
-  const handleSourceActiviation = (source) => {
+  const handleSourceActiviation = source => {
     const mainElement = document.getElementById('main');
     const confirmationElement = document.getElementById('confirmation');
     switch (source.flow) {
@@ -410,8 +412,7 @@ import GooglePay from '/javascripts/googlePayClient.js';
             correctLevel: QRCode.CorrectLevel.H,
           });
           // Hide the previous text and update the call to action.
-          form.querySelector('.payment-info.wechat p').style.display =
-            'none';
+          form.querySelector('.payment-info.wechat p').style.display = 'none';
           let amount = store.formatPrice(
             store.getPaymentTotal(),
             config.currency
@@ -510,13 +511,22 @@ import GooglePay from '/javascripts/googlePayClient.js';
     start = start ? start : Date.now();
     const endStates = ['succeeded', 'processing', 'canceled'];
     // Retrieve the PaymentIntent from it's secret
-    const response = await stripe.retrievePaymentIntent(paymentIntent_client_secret);
+    const response = await stripe.retrievePaymentIntent(
+      paymentIntent_client_secret
+    );
     if (
       !endStates.includes(response.paymentIntent.status) &&
       Date.now() < start + timeout
     ) {
       // Not done yet. Let's wait and check again.
-      setTimeout(pollPaymentIntentStatus, interval, paymentIntent_client_secret, timeout, interval, start);
+      setTimeout(
+        pollPaymentIntentStatus,
+        interval,
+        paymentIntent_client_secret,
+        timeout,
+        interval,
+        start
+      );
     } else {
       handlePayment(response);
       if (!endStates.includes(response.paymentIntent.status)) {
@@ -528,7 +538,10 @@ import GooglePay from '/javascripts/googlePayClient.js';
 
   const paymentIntent_client_secret = store.getActivePaymentIntent();
   const mainElement = document.getElementById('main');
-  if (paymentIntent_client_secret && window.location.search.includes('source')) {
+  if (
+    paymentIntent_client_secret &&
+    window.location.search.includes('source')
+  ) {
     // Update the interface to display the processing screen.
     mainElement.classList.add('success', 'processing');
 
@@ -541,7 +554,7 @@ import GooglePay from '/javascripts/googlePayClient.js';
     // Create the PaymentIntent with the cart details.
     const response = await store.createPaymentIntent(
       config.currency,
-      store.getPaymentItems(),
+      store.getPaymentItems()
     );
     paymentIntent = response.paymentIntent;
   }
@@ -612,7 +625,19 @@ import GooglePay from '/javascripts/googlePayClient.js';
     sepa_debit: {
       name: 'SEPA Direct Debit',
       flow: 'none',
-      countries: ['FR', 'DE', 'ES', 'BE', 'NL', 'LU', 'IT', 'PT', 'AT', 'IE', 'FI'],
+      countries: [
+        'FR',
+        'DE',
+        'ES',
+        'BE',
+        'NL',
+        'LU',
+        'IT',
+        'PT',
+        'AT',
+        'IE',
+        'FI',
+      ],
       currencies: ['eur'],
     },
     sofort: {
