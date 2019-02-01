@@ -97,7 +97,10 @@ export default class Store {
 
   // Set the active PaymentIntent client secret in the local storage.
   setActivePaymentIntent(paymentIntent_client_secret) {
-    localStorage.setItem('paymentIntent_client_secret', paymentIntent_client_secret);
+    localStorage.setItem(
+      'paymentIntent_client_secret',
+      paymentIntent_client_secret
+    );
   }
 
   // Get the active PaymentIntent client secret from the local storage.
